@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Online Gun Battle</title>
+    <title>Tactical Online Battle</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
@@ -11,17 +11,19 @@
             font-family: 'Arial Black', sans-serif; display: flex; flex-direction: column;
             height: 100vh; overflow: hidden; user-select: none;
         }
-        /* ヘッダー・ステータス */
+        /* ヘッダー・HP・弾数 */
         .header {
             flex: 1; display: flex; flex-direction: column;
             justify-content: center; align-items: center; background: #1a1a1a;
+            border-bottom: 2px solid #333;
         }
-        .hp-bar-container { width: 80%; height: 20px; background: #333; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+        .hp-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .hp-bar-container { width: 80%; height: 25px; background: #333; border-radius: 15px; overflow: hidden; border: 2px solid #444; }
         #hp_bar { width: 100%; height: 100%; background: #2ecc71; transition: width 0.3s; }
-        .ammo { font-size: 3rem; color: #007AFF; }
-        .mode-badge { padding: 4px 12px; background: #444; border-radius: 20px; font-size: 0.8rem; margin-top: 5px; }
+        .ammo { font-size: 3.5rem; color: #007AFF; margin: 10px 0; }
+        .mode-badge { padding: 5px 15px; background: #444; border-radius: 20px; font-size: 0.9rem; }
 
-        /* コントロール */
+        /* 操作ボタン */
         .controls {
             display: grid; grid-template-columns: 1fr 1fr;
             height: 60vh; gap: 10px; padding: 15px; background: #121212;
@@ -30,36 +32,41 @@
             border: none; border-radius: 20px; font-size: 1.2rem; font-weight: bold;
             color: white; cursor: pointer; -webkit-tap-highlight-color: transparent;
         }
-        .btn-fire { background: #c0392b; grid-column: span 2; font-size: 2rem; }
+        .btn-fire { background: #c0392b; grid-column: span 2; font-size: 2.5rem; box-shadow: 0 6px #8e2a1e; }
+        .btn-fire:active { box-shadow: 0 2px #8e2a1e; transform: translateY(4px); }
         .btn-reload { background: #27ae60; }
         .btn-mode { background: #2980b9; }
-
-        /* オーバーレイ */
-        #overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;
-        }
-        #start_btn { padding: 20px 40px; font-size: 1.5rem; background: #007AFF; border: none; color: white; border-radius: 50px; }
-        input { padding: 10px; font-size: 1rem; border-radius: 5px; border: none; text-align: center; }
         
-        /* 演出 */
-        .hit-flash { animation: flash 0.2s; }
+        button:active { opacity: 0.8; }
+
+        /* ID設定・開始画面 */
+        #overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
+        }
+        #start_btn { padding: 15px 40px; font-size: 1.5rem; background: #007AFF; border: none; color: white; border-radius: 50px; cursor: pointer; }
+        input { padding: 12px; font-size: 1.2rem; border-radius: 10px; border: none; text-align: center; width: 200px; }
+        .id-text { font-size: 1.8rem; color: #f1c40f; font-weight: bold; }
+
+        /* 被弾エフェクト */
+        .hit-flash { animation: flash 0.15s; }
         @keyframes flash { from { background: red; } to { background: #121212; } }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <h2 id="my_id_display">ID発行中...</h2>
-    <p>相手にこのIDを伝えてください</p>
-    <hr style="width:80%; border:0.5px solid #333">
-    <input type="text" id="opponent_id_input" placeholder="相手のIDを入力">
-    <button id="connect_btn" style="background:#27ae60; padding:10px 20px; border-radius:10px; border:none; color:white;">相手に接続</button>
-    <button id="start_btn">1人で練習開始</button>
+    <h2 style="margin:0;">BATTLE SETUP</h2>
+    <div style="color:#888;">あなたのID（4桁の数字）:</div>
+    <div id="my_id_display" class="id-text">発行中...</div>
+    <hr style="width:70%; border:0.5px solid #333; margin:10px 0;">
+    <input type="number" id="opponent_id_input" placeholder="相手のIDを入力">
+    <button id="connect_btn" style="background:#27ae60; padding:10px 30px; border-radius:10px; border:none; color:white; font-weight:bold;">相手と接続して開始</button>
+    <button id="start_btn">1人で練習（音を有効化）</button>
 </div>
 
-<div class="header" id="main_screen">
-    <div style="font-size: 0.8rem; color:#888;">ENEMY HP</div>
+<div class="header">
+    <div class="hp-label">YOUR HP</div>
     <div class="hp-bar-container"><div id="hp_bar"></div></div>
     <div class="ammo" id="ammo_count">12 / 12</div>
     <div id="mode_display" class="mode-badge">SEMI-AUTO</div>
@@ -75,54 +82,63 @@
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const buffers = {};
     let ammo = 12;
-    let enemyHP = 100;
+    let myHP = 100;
     let isAuto = false;
     let conn = null;
-    const peer = new Peer();
 
-    // ID発行
+    // --- IDを短く (4桁) 設定 ---
+    const myShortId = Math.floor(1000 + Math.random() * 9000).toString();
+    const peer = new Peer(myShortId);
+
     peer.on('open', (id) => {
-        document.getElementById('my_id_display').innerText = "YOUR ID: " + id;
+        document.getElementById('my_id_display').innerText = id;
     });
 
-    // 接続された時
+    peer.on('error', (err) => {
+        if (err.type === 'unavailable-id') {
+            location.reload(); // IDが被ったら自動リロードで再発行
+        }
+    });
+
+    // 接続を待ち受ける
     peer.on('connection', (c) => {
         conn = c;
-        alert("相手が接続しました！バトル開始！");
         setupReceiver();
+        alert("相手が接続しました！");
         document.getElementById('overlay').style.display = 'none';
+        audioCtx.resume();
     });
 
-    // 相手への接続ボタン
+    // 自分から接続する
     document.getElementById('connect_btn').addEventListener('click', () => {
         const id = document.getElementById('opponent_id_input').value;
         if (id) {
             conn = peer.connect(id);
             setupReceiver();
-            alert("接続完了！バトル開始！");
             document.getElementById('overlay').style.display = 'none';
+            audioCtx.resume();
         }
     });
 
-    // データ受信
+    // データ受信（撃たれた判定）
     function setupReceiver() {
         conn.on('data', (data) => {
-            if (data === 'SHOT') {
-                takeDamage(10); // ダメージを受ける
+            if (data === 'HIT') {
+                takeDamage(10); 
             }
         });
     }
 
     // ダメージ処理
     function takeDamage(dmg) {
-        enemyHP -= dmg;
-        if (enemyHP < 0) enemyHP = 0;
-        document.getElementById('hp_bar').style.width = enemyHP + "%";
+        myHP -= dmg;
+        if (myHP < 0) myHP = 0;
+        document.getElementById('hp_bar').style.width = myHP + "%";
         document.body.classList.add('hit-flash');
-        setTimeout(() => document.body.classList.remove('hit-flash'), 200);
+        setTimeout(() => document.body.classList.remove('hit-flash'), 150);
         
-        if (enemyHP <= 0) {
-            alert("あなたは倒されました...");
+        if (myHP <= 0) {
+            alert("GAME OVER...");
             location.reload();
         }
     }
@@ -131,9 +147,9 @@
     async function loadSound(name, url) {
         try {
             const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
+            const arrayBuffer = await response.buffer ? await response.buffer() : await response.arrayBuffer();
             buffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
-        } catch(e) { console.error(name + "読み込み失敗"); }
+        } catch(e) { console.log(name + "読み込み失敗"); }
     }
 
     function play(name) {
@@ -144,9 +160,10 @@
         source.start(0);
     }
 
-    // 起動
+    // 初期化（音源ロード）
     document.getElementById('start_btn').addEventListener('click', async () => {
         audioCtx.resume();
+        document.getElementById('start_btn').innerText = "LOADING...";
         await Promise.all([
             loadSound('shot', 'shot.mp3'),
             loadSound('reload', 'reload.mp3'),
@@ -161,14 +178,14 @@
         if (ammo > 0) {
             play('shot');
             ammo--;
-            if (conn && conn.open) conn.send('SHOT'); // 相手に攻撃送信
+            if (conn && conn.open) conn.send('HIT');
             updateUI();
         } else {
             play('empty');
         }
     }
 
-    // 連射
+    // 連射ロジック
     const fireBtn = document.getElementById('fire_btn');
     let timer = null;
     fireBtn.addEventListener('pointerdown', (e) => {
@@ -178,16 +195,21 @@
     });
     window.addEventListener('pointerup', () => { clearInterval(timer); });
 
-    // その他ボタン
+    // モード切替
     document.getElementById('mode_btn').addEventListener('click', () => {
         isAuto = !isAuto;
         play('ready');
         document.getElementById('mode_display').innerText = isAuto ? "FULL-AUTO" : "SEMI-AUTO";
     });
 
+    // リロード
     document.getElementById('reload_btn').addEventListener('click', () => {
         play('reload');
-        setTimeout(() => { play('ready'); ammo = 12; updateUI(); }, 1000);
+        setTimeout(() => {
+            play('ready');
+            ammo = 12;
+            updateUI();
+        }, 1000);
     });
 
     function updateUI() {
