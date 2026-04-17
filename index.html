@@ -3,217 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tactical Online Battle</title>
+    <title>Friends Battle Gun</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
             margin: 0; padding: 0; background-color: #121212; color: white;
-            font-family: 'Arial Black', sans-serif; display: flex; flex-direction: column;
+            font-family: 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column;
             height: 100vh; overflow: hidden; user-select: none;
         }
-        /* ヘッダー・HP・弾数 */
-        .header {
+        /* ステータス画面 */
+        .status-area {
             flex: 1; display: flex; flex-direction: column;
             justify-content: center; align-items: center; background: #1a1a1a;
-            border-bottom: 2px solid #333;
+            border-bottom: 3px solid #333;
         }
-        .hp-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
-        .hp-bar-container { width: 80%; height: 25px; background: #333; border-radius: 15px; overflow: hidden; border: 2px solid #444; }
-        #hp_bar { width: 100%; height: 100%; background: #2ecc71; transition: width 0.3s; }
-        .ammo { font-size: 3.5rem; color: #007AFF; margin: 10px 0; }
-        .mode-badge { padding: 5px 15px; background: #444; border-radius: 20px; font-size: 0.9rem; }
-
-        /* 操作ボタン */
-        .controls {
+        .hp-label { font-size: 0.9rem; color: #aaa; margin-bottom: 5px; font-weight: bold; }
+        .hp-bar-outer { width: 85%; height: 30px; background: #333; border-radius: 15px; overflow: hidden; border: 2px solid #555; }
+        #hp_inner { width: 100%; height: 100%; background: #2ecc71; transition: width 0.2s; }
+        .ammo-display { font-size: 4rem; font-weight: bold; color: #007AFF; margin: 10px 0; text-shadow: 0 0 15px rgba(0,122,255,0.5); }
+        
+        /* 操作パネル */
+        .control-panel {
             display: grid; grid-template-columns: 1fr 1fr;
-            height: 60vh; gap: 10px; padding: 15px; background: #121212;
+            height: 60vh; gap: 12px; padding: 15px; background: #121212;
         }
         button {
-            border: none; border-radius: 20px; font-size: 1.2rem; font-weight: bold;
+            border: none; border-radius: 25px; font-size: 1.4rem; font-weight: bold;
             color: white; cursor: pointer; -webkit-tap-highlight-color: transparent;
+            box-shadow: 0 4px rgba(0,0,0,0.3);
         }
-        .btn-fire { background: #c0392b; grid-column: span 2; font-size: 2.5rem; box-shadow: 0 6px #8e2a1e; }
-        .btn-fire:active { box-shadow: 0 2px #8e2a1e; transform: translateY(4px); }
-        .btn-reload { background: #27ae60; }
-        .btn-mode { background: #2980b9; }
+        .fire { background: #e74c3c; grid-column: span 2; font-size: 2.5rem; }
+        .fire:active { background: #c0392b; transform: translateY(2px); }
+        .reload { background: #27ae60; }
+        .mode { background: #2980b9; }
+        button:active { opacity: 0.9; }
+
+        /* セットアップ画面 */
+        #menu {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;
+        }
+        .id-box { font-size: 3rem; color: #f1c40f; font-weight: bold; background: #333; padding: 10px 30px; border-radius: 15px; }
+        input { padding: 15px; font-size: 1.5rem; border-radius: 10px; border: 2px solid #007AFF; text-align: center; width: 180px; background: #000; color: #fff; }
+        .start-btn { padding: 20px 50px; font-size: 1.5rem; background: #007AFF; border: none; color: white; border-radius: 50px; }
         
-        button:active { opacity: 0.8; }
-
-        /* ID設定・開始画面 */
-        #overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
+        /* 演出 */
+        .damaged { animation: shake 0.2s ease-in-out; background-color: #500 !important; }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(10px); }
+            50% { transform: translateX(-10px); }
+            100% { transform: translateX(0); }
         }
-        #start_btn { padding: 15px 40px; font-size: 1.5rem; background: #007AFF; border: none; color: white; border-radius: 50px; cursor: pointer; }
-        input { padding: 12px; font-size: 1.2rem; border-radius: 10px; border: none; text-align: center; width: 200px; }
-        .id-text { font-size: 1.8rem; color: #f1c40f; font-weight: bold; }
-
-        /* 被弾エフェクト */
-        .hit-flash { animation: flash 0.15s; }
-        @keyframes flash { from { background: red; } to { background: #121212; } }
     </style>
 </head>
 <body>
 
-<div id="overlay">
-    <h2 style="margin:0;">BATTLE SETUP</h2>
-    <div style="color:#888;">あなたのID（4桁の数字）:</div>
-    <div id="my_id_display" class="id-text">発行中...</div>
-    <hr style="width:70%; border:0.5px solid #333; margin:10px 0;">
-    <input type="number" id="opponent_id_input" placeholder="相手のIDを入力">
-    <button id="connect_btn" style="background:#27ae60; padding:10px 30px; border-radius:10px; border:none; color:white; font-weight:bold;">相手と接続して開始</button>
-    <button id="start_btn">1人で練習（音を有効化）</button>
+<div id="menu">
+    <h2 style="margin:0;">BATTLE READY</h2>
+    <p style="color:#888; margin:0;">あなたの4桁ID</p>
+    <div id="display_id" class="id-box">----</div>
+    <input type="number" id="input_id" placeholder="相手のID">
+    <button onclick="connectPeer()" style="background:#27ae60; padding:15px 30px; border-radius:15px; border:none; color:white; font-weight:bold;">相手と接続する</button>
+    <button class="start-btn" onclick="startApp()">1人で練習(音をON)</button>
 </div>
 
-<div class="header">
-    <div class="hp-label">YOUR HP</div>
-    <div class="hp-bar-container"><div id="hp_bar"></div></div>
-    <div class="ammo" id="ammo_count">12 / 12</div>
-    <div id="mode_display" class="mode-badge">SEMI-AUTO</div>
+<div class="status-area">
+    <div class="hp-label">TEAM HP</div>
+    <div class="hp-bar-outer"><div id="hp_inner"></div></div>
+    <div class="ammo-display" id="ammo_text">12 / 12</div>
+    <div id="mode_text" style="color:#888; font-weight:bold;">SEMI-AUTO</div>
 </div>
 
-<div class="controls">
-    <button class="btn-fire" id="fire_btn">FIRE</button>
-    <button class="btn-mode" id="mode_btn">MODE</button>
-    <button class="btn-reload" id="reload_btn">RELOAD</button>
+<div class="control-panel">
+    <button class="fire" id="btn_fire">FIRE</button>
+    <button class="mode" onclick="toggleMode()">MODE</button>
+    <button class="reload" onclick="doReload()">RELOAD</button>
 </div>
 
 <script>
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const buffers = {};
+    const sounds = {};
     let ammo = 12;
-    let myHP = 100;
-    let isAuto = false;
-    let conn = null;
+    let hp = 100;
+    let isFullAuto = false;
+    let connection = null;
 
-    // --- IDを短く (4桁) 設定 ---
-    const myShortId = Math.floor(1000 + Math.random() * 9000).toString();
-    const peer = new Peer(myShortId);
+    // 4桁のIDを作成
+    const myId = Math.floor(1000 + Math.random() * 9000).toString();
+    const peer = new Peer(myId);
 
     peer.on('open', (id) => {
-        document.getElementById('my_id_display').innerText = id;
+        document.getElementById('display_id').innerText = id;
     });
 
     peer.on('error', (err) => {
-        if (err.type === 'unavailable-id') {
-            location.reload(); // IDが被ったら自動リロードで再発行
+        if (err.type === 'unavailable-id') location.reload(); 
+    });
+
+    // 相手からの接続を待つ
+    peer.on('connection', (conn) => {
+        connection = conn;
+        initChat();
+        alert("対戦相手が接続しました！");
+        closeMenu();
+    });
+
+    // 相手に接続する
+    function connectPeer() {
+        const targetId = document.getElementById('input_id').value;
+        if (targetId) {
+            connection = peer.connect(targetId);
+            initChat();
+            closeMenu();
         }
-    });
+    }
 
-    // 接続を待ち受ける
-    peer.on('connection', (c) => {
-        conn = c;
-        setupReceiver();
-        alert("相手が接続しました！");
-        document.getElementById('overlay').style.display = 'none';
-        audioCtx.resume();
-    });
-
-    // 自分から接続する
-    document.getElementById('connect_btn').addEventListener('click', () => {
-        const id = document.getElementById('opponent_id_input').value;
-        if (id) {
-            conn = peer.connect(id);
-            setupReceiver();
-            document.getElementById('overlay').style.display = 'none';
-            audioCtx.resume();
-        }
-    });
-
-    // データ受信（撃たれた判定）
-    function setupReceiver() {
-        conn.on('data', (data) => {
-            if (data === 'HIT') {
-                takeDamage(10); 
-            }
+    function initChat() {
+        connection.on('data', (data) => {
+            if (data === 'HIT') receiveHit();
         });
     }
 
-    // ダメージ処理
-    function takeDamage(dmg) {
-        myHP -= dmg;
-        if (myHP < 0) myHP = 0;
-        document.getElementById('hp_bar').style.width = myHP + "%";
-        document.body.classList.add('hit-flash');
-        setTimeout(() => document.body.classList.remove('hit-flash'), 150);
-        
-        if (myHP <= 0) {
-            alert("GAME OVER...");
+    function closeMenu() {
+        audioCtx.resume();
+        document.getElementById('menu').style.display = 'none';
+        loadAllSounds();
+    }
+
+    function startApp() {
+        closeMenu();
+    }
+
+    // ダメージ演出
+    function receiveHit() {
+        hp -= 10;
+        if (hp < 0) hp = 0;
+        document.getElementById('hp_inner').style.width = hp + "%";
+        document.body.classList.add('damaged');
+        setTimeout(() => document.body.classList.remove('damaged'), 200);
+        if (hp <= 0) {
+            alert("撃沈！");
             location.reload();
         }
     }
 
-    // 音声読み込み
-    async function loadSound(name, url) {
-        try {
-            const response = await fetch(url);
-            const arrayBuffer = await response.buffer ? await response.buffer() : await response.arrayBuffer();
-            buffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
-        } catch(e) { console.log(name + "読み込み失敗"); }
+    // 音声ロード
+    async function loadAllSounds() {
+        const files = { shot: 'shot.mp3', reload: 'reload.mp3', ready: 'ready.mp3', empty: 'empty.mp3' };
+        for (let key in files) {
+            try {
+                const res = await fetch(files[key]);
+                const buffer = await res.arrayBuffer();
+                sounds[key] = await audioCtx.decodeAudioData(buffer);
+            } catch (e) { console.log(key + "の読み込みに失敗"); }
+        }
     }
 
-    function play(name) {
-        if (!buffers[name]) return;
+    function play(key) {
+        if (!sounds[key]) return;
         const source = audioCtx.createBufferSource();
-        source.buffer = buffers[name];
+        source.buffer = sounds[key];
         source.connect(audioCtx.destination);
         source.start(0);
     }
-
-    // 初期化（音源ロード）
-    document.getElementById('start_btn').addEventListener('click', async () => {
-        audioCtx.resume();
-        document.getElementById('start_btn').innerText = "LOADING...";
-        await Promise.all([
-            loadSound('shot', 'shot.mp3'),
-            loadSound('reload', 'reload.mp3'),
-            loadSound('ready', 'ready.mp3'),
-            loadSound('empty', 'empty.mp3')
-        ]);
-        document.getElementById('overlay').style.display = 'none';
-    });
 
     // 発射
     function fire() {
         if (ammo > 0) {
             play('shot');
             ammo--;
-            if (conn && conn.open) conn.send('HIT');
+            if (connection && connection.open) connection.send('HIT');
             updateUI();
         } else {
             play('empty');
         }
     }
 
-    // 連射ロジック
-    const fireBtn = document.getElementById('fire_btn');
-    let timer = null;
+    // 連射管理
+    const fireBtn = document.getElementById('btn_fire');
+    let autoInterval = null;
     fireBtn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         fire();
-        if (isAuto) timer = setInterval(fire, 150);
+        if (isFullAuto) autoInterval = setInterval(fire, 150);
     });
-    window.addEventListener('pointerup', () => { clearInterval(timer); });
+    window.addEventListener('pointerup', () => clearInterval(autoInterval));
 
-    // モード切替
-    document.getElementById('mode_btn').addEventListener('click', () => {
-        isAuto = !isAuto;
+    function toggleMode() {
+        isFullAuto = !isFullAuto;
         play('ready');
-        document.getElementById('mode_display').innerText = isAuto ? "FULL-AUTO" : "SEMI-AUTO";
-    });
+        document.getElementById('mode_text').innerText = isFullAuto ? "FULL-AUTO" : "SEMI-AUTO";
+    }
 
-    // リロード
-    document.getElementById('reload_btn').addEventListener('click', () => {
+    function doReload() {
         play('reload');
         setTimeout(() => {
             play('ready');
             ammo = 12;
             updateUI();
-        }, 1000);
-    });
+        }, 800);
+    }
 
     function updateUI() {
-        document.getElementById('ammo_count').innerText = ammo + " / 12";
+        document.getElementById('ammo_text').innerText = ammo + " / 12";
     }
 </script>
 </body>
