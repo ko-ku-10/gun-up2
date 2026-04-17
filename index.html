@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Online Gun Battle</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            margin: 0; padding: 0; background-color: #121212; color: white;
+            font-family: 'Arial Black', sans-serif; display: flex; flex-direction: column;
+            height: 100vh; overflow: hidden; user-select: none;
+        }
+        /* ヘッダー・ステータス */
+        .header {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; background: #1a1a1a;
+        }
+        .hp-bar-container { width: 80%; height: 20px; background: #333; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+        #hp_bar { width: 100%; height: 100%; background: #2ecc71; transition: width 0.3s; }
+        .ammo { font-size: 3rem; color: #007AFF; }
+        .mode-badge { padding: 4px 12px; background: #444; border-radius: 20px; font-size: 0.8rem; margin-top: 5px; }
+
+        /* コントロール */
+        .controls {
+            display: grid; grid-template-columns: 1fr 1fr;
+            height: 60vh; gap: 10px; padding: 15px; background: #121212;
+        }
+        button {
+            border: none; border-radius: 20px; font-size: 1.2rem; font-weight: bold;
+            color: white; cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
+        .btn-fire { background: #c0392b; grid-column: span 2; font-size: 2rem; }
+        .btn-reload { background: #27ae60; }
+        .btn-mode { background: #2980b9; }
+
+        /* オーバーレイ */
+        #overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px;
+        }
+        #start_btn { padding: 20px 40px; font-size: 1.5rem; background: #007AFF; border: none; color: white; border-radius: 50px; }
+        input { padding: 10px; font-size: 1rem; border-radius: 5px; border: none; text-align: center; }
+        
+        /* 演出 */
+        .hit-flash { animation: flash 0.2s; }
+        @keyframes flash { from { background: red; } to { background: #121212; } }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <h2 id="my_id_display">ID発行中...</h2>
+    <p>相手にこのIDを伝えてください</p>
+    <hr style="width:80%; border:0.5px solid #333">
+    <input type="text" id="opponent_id_input" placeholder="相手のIDを入力">
+    <button id="connect_btn" style="background:#27ae60; padding:10px 20px; border-radius:10px; border:none; color:white;">相手に接続</button>
+    <button id="start_btn">1人で練習開始</button>
+</div>
+
+<div class="header" id="main_screen">
+    <div style="font-size: 0.8rem; color:#888;">ENEMY HP</div>
+    <div class="hp-bar-container"><div id="hp_bar"></div></div>
+    <div class="ammo" id="ammo_count">12 / 12</div>
+    <div id="mode_display" class="mode-badge">SEMI-AUTO</div>
+</div>
+
+<div class="controls">
+    <button class="btn-fire" id="fire_btn">FIRE</button>
+    <button class="btn-mode" id="mode_btn">MODE</button>
+    <button class="btn-reload" id="reload_btn">RELOAD</button>
+</div>
+
+<script>
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const buffers = {};
+    let ammo = 12;
+    let enemyHP = 100;
+    let isAuto = false;
+    let conn = null;
+    const peer = new Peer();
+
+    // ID発行
+    peer.on('open', (id) => {
+        document.getElementById('my_id_display').innerText = "YOUR ID: " + id;
+    });
+
+    // 接続された時
+    peer.on('connection', (c) => {
+        conn = c;
+        alert("相手が接続しました！バトル開始！");
+        setupReceiver();
+        document.getElementById('overlay').style.display = 'none';
+    });
+
+    // 相手への接続ボタン
+    document.getElementById('connect_btn').addEventListener('click', () => {
+        const id = document.getElementById('opponent_id_input').value;
+        if (id) {
+            conn = peer.connect(id);
+            setupReceiver();
+            alert("接続完了！バトル開始！");
+            document.getElementById('overlay').style.display = 'none';
+        }
+    });
+
+    // データ受信
+    function setupReceiver() {
+        conn.on('data', (data) => {
+            if (data === 'SHOT') {
+                takeDamage(10); // ダメージを受ける
+            }
+        });
+    }
+
+    // ダメージ処理
+    function takeDamage(dmg) {
+        enemyHP -= dmg;
+        if (enemyHP < 0) enemyHP = 0;
+        document.getElementById('hp_bar').style.width = enemyHP + "%";
+        document.body.classList.add('hit-flash');
+        setTimeout(() => document.body.classList.remove('hit-flash'), 200);
+        
+        if (enemyHP <= 0) {
+            alert("あなたは倒されました...");
+            location.reload();
+        }
+    }
+
+    // 音声読み込み
+    async function loadSound(name, url) {
+        try {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            buffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
+        } catch(e) { console.error(name + "読み込み失敗"); }
+    }
+
+    function play(name) {
+        if (!buffers[name]) return;
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffers[name];
+        source.connect(audioCtx.destination);
+        source.start(0);
+    }
+
+    // 起動
+    document.getElementById('start_btn').addEventListener('click', async () => {
+        audioCtx.resume();
+        await Promise.all([
+            loadSound('shot', 'shot.mp3'),
+            loadSound('reload', 'reload.mp3'),
+            loadSound('ready', 'ready.mp3'),
+            loadSound('empty', 'empty.mp3')
+        ]);
+        document.getElementById('overlay').style.display = 'none';
+    });
+
+    // 発射
+    function fire() {
+        if (ammo > 0) {
+            play('shot');
+            ammo--;
+            if (conn && conn.open) conn.send('SHOT'); // 相手に攻撃送信
+            updateUI();
+        } else {
+            play('empty');
+        }
+    }
+
+    // 連射
+    const fireBtn = document.getElementById('fire_btn');
+    let timer = null;
+    fireBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        fire();
+        if (isAuto) timer = setInterval(fire, 150);
+    });
+    window.addEventListener('pointerup', () => { clearInterval(timer); });
+
+    // その他ボタン
+    document.getElementById('mode_btn').addEventListener('click', () => {
+        isAuto = !isAuto;
+        play('ready');
+        document.getElementById('mode_display').innerText = isAuto ? "FULL-AUTO" : "SEMI-AUTO";
+    });
+
+    document.getElementById('reload_btn').addEventListener('click', () => {
+        play('reload');
+        setTimeout(() => { play('ready'); ammo = 12; updateUI(); }, 1000);
+    });
+
+    function updateUI() {
+        document.getElementById('ammo_count').innerText = ammo + " / 12";
+    }
+</script>
+</body>
+</html>
