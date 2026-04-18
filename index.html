@@ -3,87 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Physical Action Battle</title>
+    <title>Action Battle - Shield Pose</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
             margin: 0; padding: 0; background: #000; color: #fff;
-            font-family: 'Avenir', sans-serif; height: 100vh; overflow: hidden;
+            font-family: sans-serif; height: 100vh; overflow: hidden;
         }
-        /* バトル中の背景演出 */
-        #game_bg {
-            position: fixed; inset: 0; transition: background 0.1s; z-index: -1;
-        }
-
-        /* 相手のHP（ターゲット） */
-        .enemy-ui { padding: 20px; text-align: center; background: rgba(255,0,0,0.2); border-bottom: 2px solid #f00; }
-        .bar-outer { width: 90%; height: 10px; background: #333; margin: 10px auto; border-radius: 5px; overflow: hidden; }
-        #enemy_hp { width: 100%; height: 100%; background: #f00; transition: width 0.3s; }
+        #game_bg { position: fixed; inset: 0; z-index: -1; transition: 0.2s; }
+        
+        /* ターゲット情報 */
+        .enemy-ui { padding: 15px; text-align: center; background: rgba(255,0,0,0.1); border-bottom: 1px solid #400; }
+        .bar-outer { width: 90%; height: 8px; background: #222; margin: 5px auto; border-radius: 4px; overflow: hidden; }
+        #enemy_hp { width: 100%; height: 100%; background: #f00; transition: 0.3s; }
 
         /* メインUI */
-        .main-ui { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .ammo-display { font-size: 6rem; font-weight: bold; font-italic: italic; color: #00d4ff; text-shadow: 0 0 20px #00d4ff; }
-        .hint-msg { font-size: 1rem; color: #ffcc00; margin-top: 10px; text-align: center; height: 1.5em; }
+        .main-display { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .ammo-num { font-size: 7rem; font-weight: 900; line-height: 1; color: #00d4ff; }
+        #status_text { font-size: 1.2rem; font-weight: bold; margin-top: 10px; height: 1.5em; color: #ffcc00; }
 
-        /* 自分のHPとシールド */
-        .my-status { padding: 20px; background: #111; }
-        #my_hp { width: 100%; height: 100%; background: #0f0; transition: width 0.3s; }
-        #shield_status { font-size: 0.8rem; color: #00d4ff; text-align: center; margin-top: 5px; }
+        /* 自分のHP */
+        .my-ui { padding: 15px; background: #111; border-top: 1px solid #333; }
+        #my_hp { width: 100%; height: 100%; background: #0f0; transition: 0.3s; }
 
-        /* 巨大な発射ボタン */
+        /* 攻撃ボタン */
         #trigger {
-            width: 100%; height: 40vh; background: linear-gradient(to bottom, #444, #222);
-            border: none; color: #fff; font-size: 2rem; font-weight: bold;
-            border-top: 4px solid #555; active { background: #666; }
+            width: 100%; height: 40vh; background: #222; border: none; color: #fff;
+            font-size: 2rem; font-weight: bold; border-top: 4px solid #444;
         }
+        #trigger:active { background: #333; }
 
-        /* 設定画面 */
+        /* ガード演出 */
+        .shield-up { background: rgba(0, 150, 255, 0.4) !important; }
+        .shield-icon { font-size: 3rem; display: none; margin-bottom: 10px; }
+
         #setup { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-        input { padding: 15px; background: #222; border: 1px solid #444; color: #fff; border-radius: 10px; width: 200px; text-align: center; }
-        
-        /* 演出用クラス */
-        .damaged { background: #f00 !important; }
-        .reloading { color: #f9a825 !important; }
+        .damaged { background: #600 !important; }
     </style>
 </head>
 <body>
 
 <div id="setup">
-    <h2 style="margin:0;">PHYSICAL BATTLE</h2>
-    <div id="my_id" style="font-size:3rem; color:#00d4ff;">----</div>
-    <input type="number" id="target_id" placeholder="OPPONENT ID">
-    <button onclick="connect()" style="background:#00d4ff; padding:15px 40px; border:none; border-radius:50px; font-weight:bold;">LINK START</button>
-    <button onclick="startSolo()" style="background:none; color:#555; border:none;">SOLO PRACTICE</button>
-    <p style="font-size:0.7rem; color:#888;">※センサー利用の許可が必要です</p>
+    <h2 style="color:#00d4ff;">BATTLE SETUP</h2>
+    <div id="my_id" style="font-size:3rem;">----</div>
+    <input type="number" id="target_id" placeholder="相手のID" style="padding:15px; width:200px; text-align:center; border-radius:10px; border:none; background:#222; color:#fff;">
+    <button onclick="connect()" style="padding:15px 40px; background:#00d4ff; border:none; border-radius:30px; font-weight:bold;">対戦開始</button>
+    <button onclick="startSolo()" style="background:none; color:#555; border:none;">練習モード</button>
 </div>
 
 <div id="game_bg"></div>
 
 <div class="enemy-ui">
-    <div style="font-size:0.7rem;">ENEMY / TARGET</div>
+    <div style="font-size:0.6rem; color:#aaa;">ENEMY HP</div>
     <div class="bar-outer"><div id="enemy_hp"></div></div>
 </div>
 
-<div class="main-ui">
-    <div id="ammo_text" class="ammo-display">8</div>
-    <div id="hint" class="hint-msg">READY</div>
+<div class="main-display">
+    <div id="shield_icon" class="shield-icon">🛡️ GUARD</div>
+    <div id="ammo_ui" class="ammo-num">8</div>
+    <div id="status_text">READY</div>
 </div>
 
-<div class="my-status">
-    <div style="font-size:0.7rem; margin-bottom:5px;">YOUR HEALTH</div>
+<div class="my-ui">
+    <div style="font-size:0.6rem; color:#aaa; margin-bottom:4px;">YOUR HP</div>
     <div class="bar-outer"><div id="my_hp"></div></div>
-    <div id="shield_status">SHIELD: READY</div>
 </div>
 
-<button id="trigger">TRIGGER / 射撃</button>
+<button id="trigger">FIRE / 撃つ</button>
 
 <script>
     const audio = new (window.AudioContext || window.webkitAudioContext)();
     const sounds = {};
     let ammo = 8, myHp = 100, enemyHp = 100;
-    let isReloading = false, isShielding = false, isSolo = false, conn = null;
+    let isReloading = false, isGuarding = false, isSolo = false, conn = null;
 
-    // PeerJS Setup
     const myShortId = Math.floor(1000 + Math.random() * 9000).toString();
     const peer = new Peer(myShortId);
     peer.on('open', id => document.getElementById('my_id').innerText = id);
@@ -93,86 +86,85 @@
         const id = document.getElementById('target_id').value;
         if(id) { conn = peer.connect(id); setupConn(); isSolo = false; hideMenu(); }
     }
-
     function startSolo() { isSolo = true; hideMenu(); }
-
-    function hideMenu() {
-        document.getElementById('setup').style.display = 'none';
-        audio.resume();
-        loadSounds();
-        requestSensors(); // センサー開始
+    function hideMenu() { 
+        document.getElementById('setup').style.display='none'; 
+        audio.resume(); loadSounds(); startSensors(); 
     }
 
     function setupConn() {
         conn.on('data', data => {
-            if(data.type === 'HIT' && !isShielding) onHit();
-            if(data.type === 'SYNC_HP') {
-                enemyHp = data.val;
+            if(data.type === 'HIT' && !isGuarding) onHit();
+            if(data.type === 'SYNC') {
+                enemyHp = data.hp;
                 document.getElementById('enemy_hp').style.width = enemyHp + "%";
                 if(enemyHp <= 0) alert("WIN!");
             }
         });
     }
 
-    // 物理アクション：センサー処理
-    function requestSensors() {
-        if (typeof DeviceMotionEvent.requestPermission === 'function') {
-            DeviceMotionEvent.requestPermission().catch(console.error);
+    // センサー：向きだけで判定
+    function startSensors() {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission().catch(console.error);
         }
 
         window.addEventListener('deviceorientation', e => {
-            // リロード動作：スマホを60度以上下に傾ける
-            if (e.beta > 70 && !isReloading && ammo < 8) {
-                doReload();
-            }
-        });
+            const beta = e.beta; // 前後の傾き
 
-        let lastShake = 0;
-        window.addEventListener('devicemotion', e => {
-            // 回避動作：スマホを強く振る
-            const acc = e.accelerationIncludingGravity;
-            const totalAcc = Math.abs(acc.x) + Math.abs(acc.y) + Math.abs(acc.z);
-            if (totalAcc > 30 && !isShielding && !isReloading) {
-                activateShield();
+            // 1. ガード判定：スマホを立てる (70度〜110度くらい)
+            if (beta > 70 && beta < 110 && !isReloading) {
+                if (!isGuarding) setGuard(true);
+            } else {
+                if (isGuarding) setGuard(false);
+            }
+
+            // 2. リロード判定：スマホを深く伏せる (20度以下)
+            if (beta < 20 && !isReloading && ammo < 8) {
+                reload();
             }
         });
     }
 
-    function doReload() {
+    function setGuard(state) {
+        isGuarding = state;
+        const bg = document.getElementById('game_bg');
+        const icon = document.getElementById('shield_icon');
+        const trigger = document.getElementById('trigger');
+        if(state) {
+            bg.classList.add('shield-up');
+            icon.style.display = 'block';
+            trigger.disabled = true;
+            document.getElementById('status_text').innerText = "GUARDING...";
+        } else {
+            bg.classList.remove('shield-up');
+            icon.style.display = 'none';
+            trigger.disabled = false;
+            document.getElementById('status_text').innerText = isReloading ? "RELOADING" : "READY";
+        }
+    }
+
+    function reload() {
         isReloading = true;
-        document.getElementById('hint').innerText = "RELOADING...";
-        document.getElementById('ammo_text').classList.add('reloading');
+        document.getElementById('status_text').innerText = "RELOADING...";
         play('reload');
         setTimeout(() => {
             ammo = 8;
             isReloading = false;
-            document.getElementById('hint').innerText = "READY";
-            document.getElementById('ammo_text').classList.remove('reloading');
-            document.getElementById('ammo_text').innerText = ammo;
+            document.getElementById('ammo_ui').innerText = ammo;
+            document.getElementById('status_text').innerText = "READY";
             play('ready');
-        }, 1500);
-    }
-
-    function activateShield() {
-        isShielding = true;
-        document.getElementById('shield_status').innerText = "SHIELD ACTIVE!";
-        document.getElementById('game_bg').style.background = "rgba(0, 212, 255, 0.3)";
-        setTimeout(() => {
-            isShielding = false;
-            document.getElementById('shield_status').innerText = "SHIELD: RECHARGING";
-            document.getElementById('game_bg').style.background = "transparent";
-            setTimeout(() => { document.getElementById('shield_status').innerText = "SHIELD: READY"; }, 3000);
-        }, 800);
+        }, 1200);
     }
 
     function onHit() {
         myHp -= 10;
         document.getElementById('my_hp').style.width = myHp + "%";
-        if(conn) conn.send({type: 'SYNC_HP', val: myHp});
+        if(conn) conn.send({type: 'SYNC', hp: myHp});
         document.getElementById('game_bg').classList.add('damaged');
-        if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        if(navigator.vibrate) navigator.vibrate(100);
         setTimeout(() => document.getElementById('game_bg').classList.remove('damaged'), 100);
-        if(myHp <= 0) alert("GAMEOVER");
+        if(myHp <= 0) alert("GAME OVER");
     }
 
     async function loadSounds() {
@@ -189,20 +181,20 @@
     function play(k) { if(sounds[k]) { const s = audio.createBufferSource(); s.buffer=sounds[k]; s.connect(audio.destination); s.start(0); } }
 
     document.getElementById('trigger').onclick = () => {
-        if(isReloading || isShielding) return;
+        if(isReloading || isGuarding) return;
         if(ammo > 0) {
             play('shot'); ammo--;
-            document.getElementById('ammo_text').innerText = ammo;
+            document.getElementById('ammo_ui').innerText = ammo;
             if(isSolo) {
                 enemyHp -= 10;
                 document.getElementById('enemy_hp').style.width = enemyHp + "%";
-                if(enemyHp <= 0) { enemyHp = 100; document.getElementById('enemy_hp').style.width = "100%"; }
+                if(enemyHp <= 0) enemyHp = 100;
             } else if(conn) {
                 conn.send({type: 'HIT'});
             }
         } else {
             play('empty');
-            document.getElementById('hint').innerText = "TILT DOWN TO RELOAD";
+            document.getElementById('status_text').innerText = "TILT DOWN TO RELOAD";
         }
     };
 </script>
