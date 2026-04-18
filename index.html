@@ -3,67 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Action Battle - Zero Bug Edition</title>
+    <title>Action Battle - Strict Reload</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body {
-            margin: 0; padding: 0; background: #000; color: #fff;
-            font-family: 'Helvetica Neue', sans-serif; height: 100vh; overflow: hidden;
-        }
+        body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
         #game_bg { position: fixed; inset: 0; z-index: -1; transition: 0.2s; }
-        
         .enemy-ui { padding: 15px; text-align: center; background: rgba(255,0,0,0.1); border-bottom: 2px solid #300; }
-        .bar-outer { width: 90%; height: 10px; background: #222; margin: 5px auto; border-radius: 5px; overflow: hidden; border: 1px solid #444; }
+        .bar-outer { width: 90%; height: 10px; background: #222; margin: 5px auto; border-radius: 5px; overflow: hidden; }
         #enemy_hp { width: 100%; height: 100%; background: #f00; transition: 0.3s; }
-
         .main-display { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .ammo-num { font-size: 8rem; font-weight: 900; line-height: 1; color: #00d4ff; text-shadow: 0 0 20px rgba(0,212,255,0.5); }
-        #status_text { font-size: 1.2rem; font-weight: bold; margin-top: 10px; height: 1.5em; color: #ffcc00; letter-spacing: 2px; }
-
+        .ammo-num { font-size: 8rem; font-weight: 900; line-height: 1; color: #00d4ff; }
+        #status_text { font-size: 1.2rem; font-weight: bold; margin-top: 10px; height: 1.5em; color: #ffcc00; }
         .my-ui { padding: 15px; background: #111; border-top: 2px solid #333; }
         #my_hp { width: 100%; height: 100%; background: #4cd964; transition: 0.3s; }
-
-        #trigger {
-            width: 100%; height: 35vh; background: linear-gradient(to bottom, #333, #111);
-            border: none; color: #fff; font-size: 2.5rem; font-weight: bold;
-            border-top: 5px solid #444; -webkit-tap-highlight-color: transparent;
-        }
-        #trigger:active:not(:disabled) { background: #444; }
-
+        #trigger { width: 100%; height: 35vh; background: #222; border: none; color: #fff; font-size: 2rem; font-weight: bold; border-top: 4px solid #444; }
         #setup { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-        input { padding: 15px; width: 220px; text-align: center; border-radius: 10px; border: 1px solid #00d4ff; background: #111; color: #fff; font-size: 1.2rem; }
-        
         .damaged { background: #900 !important; }
-        .shield-up { background: rgba(0, 150, 255, 0.4) !important; box-shadow: inset 0 0 50px #00d4ff; }
+        .shield-up { background: rgba(0, 150, 255, 0.4) !important; }
     </style>
 </head>
 <body>
 
 <div id="setup">
-    <h1 style="color:#00d4ff; margin-bottom:0;">BATTLE GUN</h1>
-    <div id="my_id" style="font-size:3.5rem; font-weight:900;">----</div>
-    <input type="number" id="target_id" placeholder="相手のIDを入力">
-    <button onclick="connect()" style="padding:15px 50px; background:#00d4ff; color:#000; border:none; border-radius:50px; font-weight:bold; font-size:1.2rem;">対戦開始</button>
-    <button onclick="startSolo()" style="background:none; color:#555; border:none; font-size:1rem;">ソロ練習モード</button>
+    <h1 style="color:#007AFF">BATTLE LINK</h1>
+    <div id="my_id" style="font-size:3rem;">----</div>
+    <input type="number" id="target_id" placeholder="相手のID" style="padding:15px; width:200px; text-align:center; border-radius:10px;">
+    <button onclick="connect()" style="padding:15px 40px; background:#007AFF; color:#fff; border:none; border-radius:30px; font-weight:bold;">対戦開始</button>
+    <button onclick="startSolo()" style="background:none; color:#555; border:none;">ソロ練習</button>
 </div>
 
 <div id="game_bg"></div>
-
-<div class="enemy-ui">
-    <div style="font-size:0.7rem; color:#aaa; letter-spacing:1px;">ENEMY HP</div>
-    <div class="bar-outer"><div id="enemy_hp"></div></div>
-</div>
-
+<div class="enemy-ui"><div class="bar-outer"><div id="enemy_hp"></div></div></div>
 <div class="main-display">
     <div id="ammo_ui" class="ammo-num">8</div>
     <div id="status_text">READY</div>
 </div>
-
-<div class="my-ui">
-    <div style="font-size:0.7rem; color:#aaa; margin-bottom:5px; letter-spacing:1px;">YOUR HP</div>
-    <div class="bar-outer"><div id="my_hp"></div></div>
-</div>
-
+<div class="my-ui"><div class="bar-outer"><div id="my_hp"></div></div></div>
 <button id="trigger">FIRE / 撃つ</button>
 
 <script>
@@ -71,6 +46,7 @@
     const sounds = {};
     let ammo = 8, myHp = 100, enemyHp = 100;
     let isReloading = false, isGuarding = false, isSolo = false, conn = null;
+    let reloadTimer = null; // リロード用タイマー
 
     const myShortId = Math.floor(1000 + Math.random() * 9000).toString();
     const peer = new Peer(myShortId);
@@ -79,14 +55,10 @@
 
     function connect() {
         const id = document.getElementById('target_id').value;
-        if(id) { conn = peer.connect(id); setupConn(); isSolo = false; hideMenu(); }
+        if(id) { conn = peer.connect(id); setupConn(); hideMenu(); }
     }
     function startSolo() { isSolo = true; hideMenu(); }
-    
-    function hideMenu() { 
-        document.getElementById('setup').style.display='none'; 
-        audio.resume(); loadSounds(); startSensors(); 
-    }
+    function hideMenu() { document.getElementById('setup').style.display='none'; audio.resume(); loadSounds(); startSensors(); }
 
     function setupConn() {
         conn.on('data', data => {
@@ -94,7 +66,7 @@
             if(data.type === 'SYNC') {
                 enemyHp = data.hp;
                 document.getElementById('enemy_hp').style.width = enemyHp + "%";
-                if(enemyHp <= 0) alert("YOU WIN!");
+                if(enemyHp <= 0) alert("WIN!");
             }
         });
     }
@@ -107,52 +79,47 @@
         window.addEventListener('deviceorientation', e => {
             const beta = e.beta; 
 
-            // ガード判定 (スマホを垂直に立てる)
+            // 1. ガード判定（垂直）
             if (beta > 75 && beta < 105 && !isReloading) {
                 if (!isGuarding) setGuard(true);
             } else {
                 if (isGuarding) setGuard(false);
             }
 
-            // リロード判定 (スマホを水平より深く伏せる: 15度以下)
-            if (beta < 15 && !isReloading && ammo < 8 && !isGuarding) {
-                reload();
+            // 2. 厳格なリロード判定（水平キープ）
+            // スマホを10度以下（ほぼ真っ平ら）にして、ガード中でなく、弾が減っている時
+            if (beta < 10 && !isReloading && !isGuarding && ammo < 8) {
+                if (!reloadTimer) {
+                    // 0.5秒間維持したらリロード開始
+                    reloadTimer = setTimeout(doReload, 500);
+                    document.getElementById('status_text').innerText = "KEEP FLAT...";
+                }
+            } else {
+                // 角度が戻ったらタイマーリセット（暴発防止）
+                clearTimeout(reloadTimer);
+                reloadTimer = null;
+                if (!isReloading && !isGuarding) document.getElementById('status_text').innerText = "READY";
             }
         });
     }
 
     function setGuard(state) {
         isGuarding = state;
-        const bg = document.getElementById('game_bg');
-        const trigger = document.getElementById('trigger');
-        if(state) {
-            bg.classList.add('shield-up');
-            trigger.disabled = true;
-            document.getElementById('status_text').innerText = "🛡️ SHIELD UP";
-        } else {
-            bg.classList.remove('shield-up');
-            trigger.disabled = false;
-            document.getElementById('status_text').innerText = isReloading ? "RELOADING" : "READY";
-        }
+        document.getElementById('game_bg').className = state ? 'shield-up' : '';
+        document.getElementById('trigger').disabled = state;
+        document.getElementById('status_text').innerText = state ? "🛡️ GUARD" : "READY";
+        if(state) { clearTimeout(reloadTimer); reloadTimer = null; }
     }
 
-    function reload() {
-        if (isReloading) return;
+    function doReload() {
         isReloading = true;
-        isGuarding = false; // ガードを強制解除
-        document.getElementById('trigger').disabled = true;
         document.getElementById('status_text').innerText = "🔄 RELOADING...";
-        document.getElementById('status_text').style.color = "#ffaa00";
-        
         play('reload');
-        
         setTimeout(() => {
             ammo = 8;
             isReloading = false;
             document.getElementById('ammo_ui').innerText = ammo;
             document.getElementById('status_text').innerText = "READY";
-            document.getElementById('status_text').style.color = "#ffcc00";
-            document.getElementById('trigger').disabled = false;
             play('ready');
         }, 1200);
     }
@@ -163,8 +130,8 @@
         if(conn) conn.send({type: 'SYNC', hp: myHp});
         document.getElementById('game_bg').classList.add('damaged');
         if(navigator.vibrate) navigator.vibrate(100);
-        setTimeout(() => document.getElementById('game_bg').classList.remove('damaged'), 150);
-        if(myHp <= 0) alert("DEFEATED...");
+        setTimeout(() => document.body.classList.remove('damaged'), 100);
+        if(myHp <= 0) alert("LOSE");
     }
 
     async function loadSounds() {
@@ -178,14 +145,7 @@
         }
     }
 
-    function play(k) { 
-        if(sounds[k]) { 
-            const s = audio.createBufferSource(); 
-            s.buffer = sounds[k]; 
-            s.connect(audio.destination); 
-            s.start(0); 
-        } 
-    }
+    function play(k) { if(sounds[k]) { const s = audio.createBufferSource(); s.buffer=sounds[k]; s.connect(audio.destination); s.start(0); } }
 
     document.getElementById('trigger').onclick = () => {
         if(isReloading || isGuarding) return;
@@ -201,7 +161,6 @@
             }
         } else {
             play('empty');
-            document.getElementById('status_text').innerText = "TILT DOWN TO RELOAD";
         }
     };
 </script>
