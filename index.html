@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tactical Battle JP/EN</title>
+    <title>Battle Gun V6 - Solo & Versus</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
@@ -12,56 +12,41 @@
             height: 100vh; overflow: hidden; user-select: none;
         }
 
-        /* 相手のステータス（画面上部） */
-        .enemy-status {
-            padding: 10px; background: rgba(255, 0, 0, 0.1);
-            border-bottom: 2px solid #500; text-align: center;
-        }
+        /* ヘッダー */
+        .enemy-status { padding: 10px; background: rgba(0, 150, 255, 0.1); border-bottom: 2px solid #004466; text-align: center; }
         
-        /* 自分のステータス（画面中央） */
-        .main-display {
-            flex: 1; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; background: #000;
-        }
-
-        /* ゲージ共通設定 */
-        .bar-label { font-size: 0.75rem; font-weight: bold; margin-bottom: 3px; letter-spacing: 1px; }
-        .bar-outer { width: 85%; height: 14px; background: #222; border-radius: 7px; overflow: hidden; border: 1px solid #444; margin-bottom: 10px; }
+        /* メイン画面 */
+        .main-display { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #000; }
+        .bar-label { font-size: 0.7rem; font-weight: bold; margin-bottom: 3px; letter-spacing: 1px; color: #888; }
+        .bar-outer { width: 85%; height: 12px; background: #222; border-radius: 6px; overflow: hidden; border: 1px solid #444; margin-bottom: 8px; }
         .bar-inner { width: 100%; height: 100%; transition: width 0.2s; }
         
-        #enemy_hp_bar { background: #ff3b30; box-shadow: 0 0 10px #f00; }
-        #my_hp_bar { background: #4cd964; box-shadow: 0 0 10px #0f0; }
-        #shield_bar { background: #007AFF; box-shadow: 0 0 10px #007AFF; }
+        #enemy_hp_bar { background: #ff3b30; }
+        #my_hp_bar { background: #4cd964; }
+        #shield_bar { background: #007AFF; }
 
         .ammo-count { font-size: 5rem; font-weight: 900; color: #fff; margin: 0; line-height: 1; }
-        .ammo-label { font-size: 0.8rem; color: #007AFF; font-weight: bold; }
+        .status-msg { font-size: 0.9rem; color: #ffcc00; height: 1.2rem; margin-top: 5px; font-weight: bold; }
 
-        /* ボタンエリア */
-        .action-grid {
-            display: grid; grid-template-columns: 1fr 1fr;
-            height: 45vh; gap: 12px; padding: 15px; background: #111;
-        }
-        button {
-            border: none; border-radius: 12px; font-size: 1.4rem; font-weight: bold;
-            color: white; cursor: pointer; -webkit-tap-highlight-color: transparent;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        button span { font-size: 0.7rem; opacity: 0.7; margin-top: 4px; }
-
+        /* ボタン */
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; height: 48vh; gap: 8px; padding: 12px; background: #111; }
+        button { border: none; border-radius: 10px; font-size: 1.2rem; font-weight: bold; color: white; cursor: pointer; -webkit-tap-highlight-color: transparent; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        button span { font-size: 0.6rem; opacity: 0.7; }
         .fire { background: #d32f2f; grid-column: span 2; font-size: 2.5rem; }
         .guard { background: #0277bd; }
         .reload { background: #2e7d32; }
+        .heal { background: #f9a825; grid-column: span 2; height: 45px; }
 
-        /* 状態変化 */
+        /* 状態異常 */
         button:disabled { opacity: 0.1; filter: grayscale(1); }
         .guard-active { background: #00f2ff !important; color: #000; box-shadow: inset 0 0 20px #fff; }
-        
-        #result_screen {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000;
-            display: none; flex-direction: column; justify-content: center; align-items: center;
-        }
 
-        #setup { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        /* セットアップ画面 */
+        #setup { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; text-align: center; }
+        .config-box { background: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-top: 10px; }
+        input { padding: 10px; background: #222; border: 1px solid #444; color: white; text-align: center; border-radius: 5px; width: 150px; }
+
+        #result_screen { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; }
         .damaged { animation: flash 0.1s infinite; }
         @keyframes flash { 0% { background: #400; } 100% { background: #000; } }
     </style>
@@ -69,31 +54,38 @@
 <body>
 
 <div id="setup">
-    <div style="color:#007AFF; font-weight:bold;">YOUR ID</div>
-    <div id="my_id" style="font-size:4rem; font-weight:900;">----</div>
-    <input type="number" id="target_id" placeholder="相手のIDを入力" style="padding:15px; background:#222; border:1px solid #444; color:white; text-align:center; font-size:1.5rem; width:220px; border-radius:10px;">
-    <button onclick="connect()" style="background:#007AFF; color:white; padding:15px 50px; border-radius:50px; font-size:1.2rem;">BATTLE START</button>
+    <div style="color:#007AFF; font-size: 0.8rem;">ONLINE ID</div>
+    <div id="my_id" style="font-size:3rem; font-weight:900;">----</div>
+    
+    <input type="number" id="target_id" placeholder="相手のIDを入力">
+    <button onclick="connect()" style="background:#007AFF; color:white; padding:10px 30px; border-radius:30px; font-size:1rem; width:220px;">対戦開始 (VERSUS)</button>
+    
+    <div class="config-box">
+        <div style="font-size:0.7rem; color:#888; margin-bottom:5px;">ソロモード設定 (SOLO CONFIG)</div>
+        <label style="font-size:0.8rem;">初期弾数: </label>
+        <input type="number" id="solo_ammo_config" value="20" style="width:50px; padding:5px;">
+        <br><br>
+        <button onclick="startSolo()" style="background:#444; color:white; padding:10px 30px; border-radius:30px; font-size:1rem; width:190px;">1人で練習 (SOLO)</button>
+    </div>
 </div>
 
 <div id="result_screen">
-    <h1 id="result_msg" style="font-size:5rem; margin:0;">WIN</h1>
-    <p id="result_sub" style="color:#888; margin-bottom:30px;">対戦終了</p>
-    <button onclick="location.reload()" style="padding:15px 40px; background:#333; border-radius:30px;">RETRY (再挑戦)</button>
+    <h1 id="result_msg" style="font-size:4rem;">WIN</h1>
+    <button onclick="location.reload()" style="padding:15px 40px; background:#333; border:none; color:white; border-radius:30px;">BACK TO MENU</button>
 </div>
 
 <div class="enemy-status">
-    <div class="bar-label">ENEMY HP <span style="font-weight:normal;">(相手の体力)</span></div>
+    <div class="bar-label" id="enemy_label">ENEMY HP (相手の体力)</div>
     <div class="bar-outer" style="margin:0 auto;"><div id="enemy_hp_bar" class="bar-inner"></div></div>
 </div>
 
 <div class="main-display">
-    <div class="ammo-label">AMMO (残弾数)</div>
-    <div class="ammo-count" id="ammo_ui">12</div>
-    
-    <div class="bar-label" style="margin-top:20px;">YOUR HP <span style="font-weight:normal;">(自分の体力)</span></div>
+    <div class="ammo-count" id="ammo_ui">0</div>
+    <div style="font-size:0.7rem; color:#007AFF;">AMMO</div>
+    <div id="status_msg" class="status-msg">READY</div>
+    <div class="bar-label" style="margin-top:15px;">YOUR HP (自分の体力)</div>
     <div class="bar-outer"><div id="my_hp_bar" class="bar-inner"></div></div>
-    
-    <div class="bar-label">SHIELD <span style="font-weight:normal;">(防護エネルギー)</span></div>
+    <div class="bar-label">SHIELD (ガード)</div>
     <div class="bar-outer"><div id="shield_bar" class="bar-inner"></div></div>
 </div>
 
@@ -101,13 +93,14 @@
     <button class="fire" id="btn_fire">FIRE<span>攻撃</span></button>
     <button class="guard" id="btn_guard">GUARD<span>防御</span></button>
     <button class="reload" onclick="reload()">RELOAD<span>装填</span></button>
+    <button class="heal" onclick="heal()">HEAL<span>回復</span></button>
 </div>
 
 <script>
     const audio = new (window.AudioContext || window.webkitAudioContext)();
     const sounds = {};
-    let ammo = 12, myHp = 100, enemyHp = 100, shield = 100;
-    let isReloading = false, isGuarding = false, shieldBroken = false;
+    let maxAmmo = 8, ammo = 8, myHp = 200, enemyHp = 200, shield = 100;
+    let isBusy = false, isGuarding = false, shieldBroken = false, isSolo = false;
     let conn = null;
 
     const myId = Math.floor(1000 + Math.random() * 9000).toString();
@@ -117,7 +110,14 @@
 
     function connect() {
         const id = document.getElementById('target_id').value;
-        if(id) { conn = peer.connect(id); setupConn(); hideMenu(); }
+        if(id) { conn = peer.connect(id); setupConn(); isSolo = false; maxAmmo = 8; hideMenu(); }
+    }
+
+    function startSolo() {
+        isSolo = true;
+        maxAmmo = parseInt(document.getElementById('solo_ammo_config').value) || 20;
+        document.getElementById('enemy_label').innerText = "TARGET HP (練習用標的)";
+        hideMenu();
     }
 
     function setupConn() {
@@ -125,84 +125,115 @@
             if(data.type === 'HIT') onHit();
             if(data.type === 'HP_SYNC') {
                 enemyHp = data.val;
-                document.getElementById('enemy_hp_bar').style.width = enemyHp + "%";
-                if(enemyHp <= 0) showResult("WIN", "勝利！");
+                document.getElementById('enemy_hp_bar').style.width = (enemyHp / 200 * 100) + "%";
+                if(enemyHp <= 0) showResult("WIN");
             }
         });
     }
 
-    function hideMenu() { audio.resume(); document.getElementById('setup').style.display='none'; loadSounds(); syncHp(); }
-
-    function syncHp() { if(conn && conn.open) conn.send({type: 'HP_SYNC', val: myHp}); }
+    function hideMenu() {
+        audio.resume();
+        document.getElementById('setup').style.display='none';
+        ammo = maxAmmo;
+        updateUI();
+        loadSounds();
+    }
 
     function onHit() {
         if(isGuarding && shield > 0) return;
         myHp -= 10;
-        document.getElementById('my_hp_bar').style.width = Math.max(0, myHp) + "%";
-        syncHp();
+        updateBars();
+        if(conn) conn.send({type: 'HP_SYNC', val: myHp});
         document.body.classList.add('damaged');
         if(navigator.vibrate) navigator.vibrate(50);
         setTimeout(() => document.body.classList.remove('damaged'), 100);
-        if(myHp <= 0) showResult("LOSE", "敗北...");
+        if(myHp <= 0) showResult("LOSE");
     }
 
-    function showResult(msg, sub) {
+    function showResult(msg) {
         document.getElementById('result_msg').innerText = msg;
-        document.getElementById('result_sub').innerText = sub;
         document.getElementById('result_screen').style.display = 'flex';
     }
 
     async function loadSounds() {
         const f = { shot:'shot.mp3', reload:'reload.mp3', ready:'ready.mp3', empty:'empty.mp3' };
         for(let k in f) {
-            const r = await fetch(f[k]);
-            const b = await r.arrayBuffer();
-            sounds[k] = await audio.decodeAudioData(b);
+            try {
+                const r = await fetch(f[k]);
+                const b = await r.arrayBuffer();
+                sounds[k] = await audio.decodeAudioData(b);
+            } catch(e) {}
         }
     }
 
     function play(k) { if(sounds[k]) { const s = audio.createBufferSource(); s.buffer=sounds[k]; s.connect(audio.destination); s.start(0); } }
 
     function fire() {
-        if(isReloading || isGuarding) return;
+        if(isBusy || isGuarding) return;
         if(ammo > 0) {
             play('shot'); ammo--;
-            if(conn) conn.send({type: 'HIT'});
+            if(isSolo) {
+                enemyHp -= 10;
+                document.getElementById('enemy_hp_bar').style.width = (enemyHp / 200 * 100) + "%";
+                if(enemyHp <= 0) { enemyHp = 200; setTimeout(() => { alert("標的を破壊！リセットします"); updateBars(); }, 100); }
+            } else if(conn) {
+                conn.send({type: 'HIT'});
+            }
             updateUI();
         } else { play('empty'); }
     }
 
-    const fb = document.getElementById('btn_fire');
-    fb.onclick = fire;
+    document.getElementById('btn_fire').onclick = fire;
 
     const gb = document.getElementById('btn_guard');
     setInterval(() => {
         if(isGuarding && shield > 0) {
-            shield -= 2.5;
-            if(shield <= 0) { shield = 0; stopGuard(); shieldBroken = true; setTimeout(()=>shieldBroken=false, 3000); }
+            shield -= 3;
+            if(shield <= 0) { shield = 0; stopGuard(); shieldBroken = true; setTimeout(()=>shieldBroken=false, 4000); }
         } else if(!isGuarding && shield < 100) {
-            shield += 1.2;
+            shield += 1.5;
         }
         document.getElementById('shield_bar').style.width = shield + "%";
-        gb.disabled = shieldBroken || isReloading;
-        if(shieldBroken) document.getElementById('shield_bar').style.background = "#ffaa00";
-        else document.getElementById('shield_bar').style.background = "#007AFF";
+        gb.disabled = shieldBroken || isBusy;
     }, 50);
 
-    gb.onpointerdown = () => { if(!shieldBroken && !isReloading) { isGuarding = true; gb.classList.add('guard-active'); fb.disabled = true; } };
-    const stopGuard = () => { isGuarding = false; gb.classList.remove('guard-active'); fb.disabled = false; };
+    gb.onpointerdown = () => { if(!shieldBroken && !isBusy) { isGuarding = true; gb.classList.add('guard-active'); document.getElementById('btn_fire').disabled = true; } };
+    const stopGuard = () => { isGuarding = false; gb.classList.remove('guard-active'); document.getElementById('btn_fire').disabled = false; };
     gb.onpointerup = stopGuard;
     gb.onpointerleave = stopGuard;
 
     function reload() {
-        if(isReloading || ammo === 12) return;
-        isReloading = true; stopGuard();
-        fb.disabled = gb.disabled = true;
+        if(isBusy || ammo === maxAmmo) return;
+        startAction("RELOADING...", 1000, () => { ammo = maxAmmo; play('ready'); });
         play('reload');
+    }
+
+    function heal() {
+        if(isBusy || myHp >= 200) return;
+        startAction("HEALING...", 3000, () => { 
+            myHp = Math.min(200, myHp + 40); 
+            updateBars();
+            if(conn) conn.send({type: 'HP_SYNC', val: myHp});
+            play('ready');
+        });
+    }
+
+    function startAction(msg, time, callback) {
+        isBusy = true; stopGuard();
+        document.getElementById('status_msg').innerText = msg;
+        const buttons = document.querySelectorAll('.action-grid button');
+        buttons.forEach(b => b.disabled = true);
         setTimeout(() => {
-            play('ready'); ammo = 12; isReloading = false;
-            fb.disabled = gb.disabled = false; updateUI();
-        }, 1000);
+            callback(); isBusy = false;
+            document.getElementById('status_msg').innerText = "READY";
+            buttons.forEach(b => b.disabled = false);
+            updateUI();
+        }, time);
+    }
+
+    function updateBars() {
+        document.getElementById('my_hp_bar').style.width = (myHp / 200 * 100) + "%";
+        document.getElementById('enemy_hp_bar').style.width = (enemyHp / 200 * 100) + "%";
     }
 
     function updateUI() { document.getElementById('ammo_ui').innerText = ammo; }
