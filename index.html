@@ -3,91 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tactical Battle System</title>
+    <title>Tactical Battle Online V4</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body {
             margin: 0; padding: 0; background-color: #050505; color: white;
-            font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column;
+            font-family: 'Courier New', sans-serif; display: flex; flex-direction: column;
             height: 100vh; overflow: hidden; user-select: none;
         }
         /* ステータスセクション */
         .status-header {
-            flex: 1.2; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; 
-            background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
-            border-bottom: 2px solid #555; position: relative;
+            flex: 1.5; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; background: #000;
+            border-bottom: 2px solid #333;
         }
-        .hp-container { width: 85%; height: 15px; background: #222; border-radius: 5px; border: 1px solid #444; margin-top: 10px; }
-        #hp_bar { width: 100%; height: 100%; background: #00ff00; transition: width 0.1s; }
-        .ammo-text { font-size: 4rem; font-weight: bold; color: #00d4ff; margin: 0; }
-        #log { position: absolute; bottom: 5px; left: 10px; font-size: 0.7rem; color: #0f0; }
-
+        .bar-label { font-size: 0.7rem; color: #888; margin-top: 5px; }
+        .bar-outer { width: 80%; height: 12px; background: #222; border-radius: 6px; overflow: hidden; border: 1px solid #444; }
+        #my_hp_bar { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
+        #enemy_hp_bar { width: 100%; height: 100%; background: #ff3b30; transition: width 0.2s; }
+        #shield_bar { width: 100%; height: 100%; background: #00aaff; transition: width 0.1s; }
+        
+        .ammo-text { font-size: 3.5rem; font-weight: bold; color: #00d4ff; margin: 5px 0; }
+        
         /* バトルボタンエリア */
         .battle-grid {
             display: grid; grid-template-columns: 1fr 1fr;
-            height: 55vh; gap: 10px; padding: 15px;
+            height: 50vh; gap: 10px; padding: 15px;
         }
         button {
-            border: 2px solid #444; border-radius: 10px; font-size: 1.2rem; font-weight: bold;
+            border: 2px solid #444; border-radius: 12px; font-size: 1.2rem; font-weight: bold;
             color: white; cursor: pointer; -webkit-tap-highlight-color: transparent;
-            transition: all 0.05s; text-transform: uppercase;
         }
-        .fire { background: #900; grid-column: span 2; font-size: 2.5rem; border-color: #f00; }
-        .guard { background: #004466; border-color: #00aaff; }
-        .reload { background: #006622; border-color: #00ff66; }
-        .mode-btn { background: #444; border-color: #888; grid-column: span 2; height: 40px; font-size: 0.9rem; }
+        .fire { background: #600; grid-column: span 2; font-size: 2.2rem; border-color: #900; }
+        .guard { background: #003344; border-color: #00aaff; }
+        .reload { background: #004411; border-color: #00ff66; }
+        
+        /* 特殊状態 */
+        button:disabled { opacity: 0.1; background: #111 !important; }
+        .guard-active { background: #00aaff !important; box-shadow: 0 0 15px #00aaff; color: #000; }
+        .shield-broken { border-color: #ffaa00 !important; opacity: 0.5; }
 
-        /* 状態異常 */
-        button:disabled { opacity: 0.2; background: #111 !important; border-color: #222 !important; }
-        button:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.5); }
-        .guarding { background: #00aaff !important; box-shadow: 0 0 20px #00aaff; }
+        /* 結果画面 */
+        #result_screen {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+        }
 
-        /* 被弾エフェクト */
-        .damaged { animation: shake 0.1s cubic-bezier(.36,.07,.19,.97) both; background-color: #300 !important; }
-        @keyframes shake { 0%, 100% { transform: translate(0,0); } 25% { transform: translate(5px, 5px); } 75% { transform: translate(-5px, -5px); } }
-
-        /* オーバーレイ */
         #setup { position: fixed; inset: 0; background: #000; z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-        .id-label { font-size: 3rem; color: #00d4ff; font-family: sans-serif; }
+        .damaged { animation: shake 0.1s infinite; }
+        @keyframes shake { 0% { background: #300; } 100% { background: #000; } }
     </style>
 </head>
 <body>
 
 <div id="setup">
-    <div style="color:#666">READY TO LINK</div>
-    <div id="my_id" class="id-label">----</div>
-    <input type="number" id="target_id" placeholder="OPPONENT ID" style="padding:15px; background:#111; border:1px solid #00d4ff; color:white; text-align:center; font-size:1.2rem; border-radius:5px;">
-    <button onclick="connect()" style="background:#00d4ff; color:#000; padding:10px 30px; border:none; border-radius:5px; font-weight:bold;">CONNECT</button>
-    <button onclick="hideMenu()" style="background:none; border:none; color:#444;">PRACTICE MODE</button>
+    <div id="my_id" style="font-size:3rem; color:#00d4ff;">----</div>
+    <input type="number" id="target_id" placeholder="相手のIDを入力" style="padding:15px; background:#111; border:1px solid #00d4ff; color:white; text-align:center; font-size:1.2rem; width:200px;">
+    <button onclick="connect()" style="background:#00d4ff; color:#000; padding:10px 40px; border:none; border-radius:10px; font-weight:bold;">CONNECT</button>
 </div>
 
-<div class="status-header" id="screen">
-    <div id="log">SYSTEM READY...</div>
-    <div style="font-size:0.7rem; color:#aaa">HEALTH POINT</div>
-    <div class="hp-container"><div id="hp_bar"></div></div>
+<div id="result_screen">
+    <h1 id="result_msg" style="font-size:4rem;">WIN</h1>
+    <button onclick="location.reload()" style="padding:15px 30px; background:#444; border:none; color:white;">RETRY</button>
+</div>
+
+<div class="status-header">
+    <div class="bar-label">ENEMY HP</div>
+    <div class="bar-outer"><div id="enemy_hp_bar"></div></div>
     <div class="ammo-text" id="ammo_ui">12/12</div>
-    <div id="info_ui" style="color:#ffcc00; font-size:0.8rem;">SEMI-AUTO</div>
+    <div class="bar-label">YOUR HP</div>
+    <div class="bar-outer"><div id="my_hp_bar"></div></div>
+    <div class="bar-label">SHIELD STAMINA</div>
+    <div class="bar-outer"><div id="shield_bar"></div></div>
 </div>
 
 <div class="battle-grid">
     <button class="fire" id="btn_fire">FIRE</button>
     <button class="guard" id="btn_guard">GUARD</button>
     <button class="reload" id="btn_reload" onclick="reload()">RELOAD</button>
-    <button class="mode-btn" onclick="switchMode()">CHANGE FIRE MODE</button>
 </div>
 
 <script>
     const audio = new (window.AudioContext || window.webkitAudioContext)();
     const sounds = {};
-    let ammo = 12, hp = 100, isAuto = false, isReloading = false, isGuarding = false;
+    let ammo = 12, myHp = 100, enemyHp = 100, shield = 100;
+    let isReloading = false, isGuarding = false, shieldBroken = false;
     let conn = null, autoTimer = null;
 
-    // Peer初期化
     const myId = Math.floor(1000 + Math.random() * 9000).toString();
     const peer = new Peer(myId);
     peer.on('open', id => document.getElementById('my_id').innerText = id);
-    peer.on('connection', c => { conn = c; setupConn(); hideMenu(); alert("LINK ESTABLISHED"); });
+    peer.on('connection', c => { conn = c; setupConn(); hideMenu(); });
 
     function connect() {
         const id = document.getElementById('target_id').value;
@@ -96,27 +102,36 @@
 
     function setupConn() {
         conn.on('data', data => {
-            if(data === 'HIT') onHit();
-            if(data === 'BLOCKED') addLog("ATTACK BLOCKED BY ENEMY");
+            if(data.type === 'HIT') onHit();
+            if(data.type === 'HP_SYNC') updateEnemyHp(data.val);
         });
     }
 
-    function hideMenu() { audio.resume(); document.getElementById('setup').style.display='none'; loadSounds(); }
+    function hideMenu() { audio.resume(); document.getElementById('setup').style.display='none'; loadSounds(); syncHp(); }
 
-    function addLog(msg) { const l = document.getElementById('log'); l.innerText = msg; }
+    function updateEnemyHp(val) {
+        enemyHp = val;
+        document.getElementById('enemy_hp_bar').style.width = enemyHp + "%";
+        if(enemyHp <= 0) showResult("YOU WIN");
+    }
+
+    function syncHp() {
+        if(conn && conn.open) conn.send({type: 'HP_SYNC', val: myHp});
+    }
 
     function onHit() {
-        if(isGuarding) {
-            if(conn) conn.send('BLOCKED');
-            addLog("GUARDED!");
-            return;
-        }
-        hp -= 10;
-        document.getElementById('hp_bar').style.width = Math.max(0, hp) + "%";
+        if(isGuarding && shield > 0) return; // ガード成功
+        myHp -= 10;
+        document.getElementById('my_hp_bar').style.width = Math.max(0, myHp) + "%";
+        syncHp();
         document.body.classList.add('damaged');
-        if(navigator.vibrate) navigator.vibrate(50);
         setTimeout(() => document.body.classList.remove('damaged'), 100);
-        if(hp <= 0) { alert("YOU ARE ELIMINATED"); location.reload(); }
+        if(myHp <= 0) showResult("YOU LOSE");
+    }
+
+    function showResult(msg) {
+        document.getElementById('result_msg').innerText = msg;
+        document.getElementById('result_screen').style.display = 'flex';
     }
 
     async function loadSounds() {
@@ -135,52 +150,46 @@
         if(ammo > 0) {
             play('shot');
             ammo--;
-            if(conn) conn.send('HIT');
+            if(conn) conn.send({type: 'HIT'});
             updateUI();
         } else {
-            stopAuto();
             play('empty');
         }
     }
 
-    // FIREボタン
+    // FIREボタン（単発のみに簡略化してバグ防止）
     const fb = document.getElementById('btn_fire');
-    fb.addEventListener('pointerdown', e => { e.preventDefault(); fire(); if(isAuto && ammo>0) autoTimer=setInterval(fire, 130); });
-    const stopAuto = () => { clearInterval(autoTimer); autoTimer=null; };
-    window.addEventListener('pointerup', stopAuto);
+    fb.onclick = fire;
 
-    // GUARDボタン (長押し中有効)
+    // GUARDボタンとスタミナ
     const gb = document.getElementById('btn_guard');
-    gb.addEventListener('pointerdown', () => {
-        if(isReloading) return;
-        isGuarding = true;
-        gb.classList.add('guarding');
-        fb.disabled = true;
-    });
-    const stopGuard = () => { isGuarding = false; gb.classList.remove('guarding'); fb.disabled = false; };
-    gb.addEventListener('pointerup', stopGuard);
-    gb.addEventListener('pointerleave', stopGuard);
+    setInterval(() => {
+        if(isGuarding && shield > 0) {
+            shield -= 2; // ガード中の消費
+            if(shield <= 0) { shield = 0; stopGuard(); shieldBroken = true; setTimeout(()=>shieldBroken=false, 3000); }
+        } else if(!isGuarding && shield < 100) {
+            shield += 1; // 回復
+        }
+        document.getElementById('shield_bar').style.width = shield + "%";
+        gb.disabled = shieldBroken;
+    }, 50);
 
-    function switchMode() {
-        isAuto = !isAuto;
-        play('ready');
-        document.getElementById('info_ui').innerText = isAuto ? "FULL-AUTO" : "SEMI-AUTO";
-    }
+    gb.onpointerdown = () => { if(!shieldBroken && !isReloading) { isGuarding = true; gb.classList.add('guard-active'); fb.disabled = true; } };
+    const stopGuard = () => { isGuarding = false; gb.classList.remove('guard-active'); fb.disabled = false; };
+    gb.onpointerup = stopGuard;
+    gb.onpointerleave = stopGuard;
 
     function reload() {
         if(isReloading || ammo === 12) return;
         isReloading = true;
-        stopAuto();
         fb.disabled = gb.disabled = true;
-        document.getElementById('info_ui').innerText = "RELOADING...";
         play('reload');
         setTimeout(() => {
             play('ready');
             ammo = 12; isReloading = false;
             fb.disabled = gb.disabled = false;
             updateUI();
-            document.getElementById('info_ui').innerText = isAuto ? "FULL-AUTO" : "SEMI-AUTO";
-        }, 1200);
+        }, 1000);
     }
 
     function updateUI() { document.getElementById('ammo_ui').innerText = ammo + "/12"; }
