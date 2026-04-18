@@ -3,50 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Action Battle - Strict Reload</title>
+    <title>Tactical Motion Battle</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; overflow: hidden; }
+        body { margin: 0; padding: 0; background: #000; color: #fff; font-family: 'Courier New', Courier, monospace; height: 100vh; overflow: hidden; }
         #game_bg { position: fixed; inset: 0; z-index: -1; transition: 0.2s; }
-        .enemy-ui { padding: 15px; text-align: center; background: rgba(255,0,0,0.1); border-bottom: 2px solid #300; }
+        
+        /* 相手HP */
+        .enemy-ui { padding: 10px; text-align: center; background: rgba(255,0,0,0.1); border-bottom: 2px solid #500; }
         .bar-outer { width: 90%; height: 10px; background: #222; margin: 5px auto; border-radius: 5px; overflow: hidden; }
         #enemy_hp { width: 100%; height: 100%; background: #f00; transition: 0.3s; }
+
+        /* メインUI */
         .main-display { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .ammo-num { font-size: 8rem; font-weight: 900; line-height: 1; color: #00d4ff; }
-        #status_text { font-size: 1.2rem; font-weight: bold; margin-top: 10px; height: 1.5em; color: #ffcc00; }
-        .my-ui { padding: 15px; background: #111; border-top: 2px solid #333; }
-        #my_hp { width: 100%; height: 100%; background: #4cd964; transition: 0.3s; }
-        #trigger { width: 100%; height: 35vh; background: #222; border: none; color: #fff; font-size: 2rem; font-weight: bold; border-top: 4px solid #444; }
-        #setup { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
+        .weapon-name { font-size: 1.2rem; color: #aaa; margin-bottom: 5px; }
+        .ammo-num { font-size: 7rem; font-weight: 900; line-height: 1; color: #00d4ff; }
+        #status_text { font-size: 1.2rem; font-weight: bold; margin: 10px 0; color: #ffcc00; height: 1.5em; }
+
+        /* 操作パネル */
+        .control-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px; background: #111; }
+        button { border: none; color: #fff; font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent; border-radius: 5px; }
+        
+        .mode-btn { background: #333; padding: 15px; font-size: 0.8rem; }
+        .mode-active { background: #007AFF; box-shadow: 0 0 10px #007AFF; }
+        .weapon-btn { background: #444; padding: 15px; grid-column: span 1; }
+        .weapon-active { background: #666; border: 2px solid #00d4ff; }
+
+        #trigger { width: 100%; height: 30vh; background: #c62828; font-size: 2.5rem; border-top: 5px solid #b71c1c; grid-column: span 2; }
+
+        /* 状態演出 */
+        .shield-active { background: rgba(0, 150, 255, 0.4) !important; box-shadow: inset 0 0 100px #00d4ff; }
         .damaged { background: #900 !important; }
-        .shield-up { background: rgba(0, 150, 255, 0.4) !important; }
+        
+        #setup { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px; }
     </style>
 </head>
 <body>
 
 <div id="setup">
-    <h1 style="color:#007AFF">BATTLE LINK</h1>
-    <div id="my_id" style="font-size:3rem;">----</div>
-    <input type="number" id="target_id" placeholder="相手のID" style="padding:15px; width:200px; text-align:center; border-radius:10px;">
-    <button onclick="connect()" style="padding:15px 40px; background:#007AFF; color:#fff; border:none; border-radius:30px; font-weight:bold;">対戦開始</button>
-    <button onclick="startSolo()" style="background:none; color:#555; border:none;">ソロ練習</button>
+    <h1 style="color:#00d4ff">TACTICAL CORE</h1>
+    <div id="my_id" style="font-size:3.5rem;">----</div>
+    <input type="number" id="target_id" placeholder="OPPONENT ID" style="padding:15px; width:200px; text-align:center;">
+    <button onclick="connect()" style="padding:15px 40px; background:#00d4ff; border-radius:30px;">BATTLE START</button>
+    <button onclick="startSolo()" style="background:none; color:#555;">SOLO PRACTICE</button>
 </div>
 
 <div id="game_bg"></div>
 <div class="enemy-ui"><div class="bar-outer"><div id="enemy_hp"></div></div></div>
+
 <div class="main-display">
-    <div id="ammo_ui" class="ammo-num">8</div>
+    <div id="weapon_label" class="weapon-name">PISTOL</div>
+    <div id="ammo_ui" class="ammo-num">12</div>
     <div id="status_text">READY</div>
 </div>
-<div class="my-ui"><div class="bar-outer"><div id="my_hp"></div></div></div>
-<button id="trigger">FIRE / 撃つ</button>
+
+<div class="control-panel">
+    <button id="btn_mode" class="mode-btn" onclick="toggleFireMode()">MODE: SEMI</button>
+    <button id="btn_swap" class="mode-btn" onclick="swapWeapon()">SWAP WEAPON</button>
+    <button id="trigger">FIRE</button>
+</div>
 
 <script>
     const audio = new (window.AudioContext || window.webkitAudioContext)();
     const sounds = {};
-    let ammo = 8, myHp = 100, enemyHp = 100;
+    const weapons = {
+        pistol: { name: "PISTOL", max: 12, reloadTime: 800, damage: 15 },
+        rifle: { name: "RIFLE", max: 30, reloadTime: 2000, damage: 10 }
+    };
+
+    let currentWeapon = 'pistol';
+    let ammo = weapons.pistol.max;
+    let myHp = 100, enemyHp = 100;
     let isReloading = false, isGuarding = false, isSolo = false, conn = null;
-    let reloadTimer = null; // リロード用タイマー
+    let fireMode = 'SEMI'; // 'SEMI' or 'AUTO'
+    let autoFireInterval = null;
 
     const myShortId = Math.floor(1000 + Math.random() * 9000).toString();
     const peer = new Peer(myShortId);
@@ -62,11 +92,11 @@
 
     function setupConn() {
         conn.on('data', data => {
-            if(data.type === 'HIT' && !isGuarding) onHit();
+            if(data.type === 'HIT' && !isGuarding) onHit(data.dmg);
             if(data.type === 'SYNC') {
                 enemyHp = data.hp;
                 document.getElementById('enemy_hp').style.width = enemyHp + "%";
-                if(enemyHp <= 0) alert("WIN!");
+                if(enemyHp <= 0) alert("MISSION ACCOMPLISHED");
             }
         });
     }
@@ -75,64 +105,98 @@
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission().catch(console.error);
         }
-
         window.addEventListener('deviceorientation', e => {
             const beta = e.beta; 
-
-            // 1. ガード判定（垂直）
-            if (beta > 75 && beta < 105 && !isReloading) {
+            if (Math.abs(beta) > 75 && Math.abs(beta) < 105 && !isReloading) {
                 if (!isGuarding) setGuard(true);
             } else {
                 if (isGuarding) setGuard(false);
             }
-
-            // 2. 厳格なリロード判定（水平キープ）
-            // スマホを10度以下（ほぼ真っ平ら）にして、ガード中でなく、弾が減っている時
-            if (beta < 10 && !isReloading && !isGuarding && ammo < 8) {
-                if (!reloadTimer) {
-                    // 0.5秒間維持したらリロード開始
-                    reloadTimer = setTimeout(doReload, 500);
-                    document.getElementById('status_text').innerText = "KEEP FLAT...";
-                }
-            } else {
-                // 角度が戻ったらタイマーリセット（暴発防止）
-                clearTimeout(reloadTimer);
-                reloadTimer = null;
-                if (!isReloading && !isGuarding) document.getElementById('status_text').innerText = "READY";
+            if (Math.abs(beta) > 160 && !isReloading && !isGuarding && ammo < weapons[currentWeapon].max) {
+                doReload();
             }
         });
     }
 
+    function toggleFireMode() {
+        fireMode = (fireMode === 'SEMI') ? 'AUTO' : 'SEMI';
+        const btn = document.getElementById('btn_mode');
+        btn.innerText = "MODE: " + fireMode;
+        btn.classList.toggle('mode-active', fireMode === 'AUTO');
+    }
+
+    function swapWeapon() {
+        if (isReloading) return;
+        currentWeapon = (currentWeapon === 'pistol') ? 'rifle' : 'pistol';
+        ammo = weapons[currentWeapon].max;
+        document.getElementById('weapon_label').innerText = weapons[currentWeapon].name;
+        document.getElementById('ammo_ui').innerText = ammo;
+        play('ready');
+    }
+
     function setGuard(state) {
         isGuarding = state;
-        document.getElementById('game_bg').className = state ? 'shield-up' : '';
-        document.getElementById('trigger').disabled = state;
+        document.getElementById('game_bg').className = state ? 'shield-active' : '';
         document.getElementById('status_text').innerText = state ? "🛡️ GUARD" : "READY";
-        if(state) { clearTimeout(reloadTimer); reloadTimer = null; }
+        if(state) stopAutoFire();
     }
 
     function doReload() {
         isReloading = true;
+        stopAutoFire();
         document.getElementById('status_text').innerText = "🔄 RELOADING...";
         play('reload');
         setTimeout(() => {
-            ammo = 8;
+            ammo = weapons[currentWeapon].max;
             isReloading = false;
             document.getElementById('ammo_ui').innerText = ammo;
             document.getElementById('status_text').innerText = "READY";
             play('ready');
-        }, 1200);
+        }, weapons[currentWeapon].reloadTime);
     }
 
-    function onHit() {
-        myHp -= 10;
-        document.getElementById('my_hp').style.width = myHp + "%";
-        if(conn) conn.send({type: 'SYNC', hp: myHp});
+    function onHit(dmg) {
+        myHp -= dmg;
         document.getElementById('game_bg').classList.add('damaged');
-        if(navigator.vibrate) navigator.vibrate(100);
-        setTimeout(() => document.body.classList.remove('damaged'), 100);
-        if(myHp <= 0) alert("LOSE");
+        if(conn) conn.send({type: 'SYNC', hp: myHp});
+        if(navigator.vibrate) navigator.vibrate(50);
+        setTimeout(() => document.getElementById('game_bg').classList.remove('damaged'), 100);
+        if(myHp <= 0) alert("K.I.A.");
     }
+
+    function fire() {
+        if(isReloading || isGuarding) return;
+        if(ammo > 0) {
+            play('shot'); ammo--;
+            document.getElementById('ammo_ui').innerText = ammo;
+            const dmg = weapons[currentWeapon].damage;
+            if(isSolo) {
+                enemyHp -= dmg;
+                document.getElementById('enemy_hp').style.width = enemyHp + "%";
+                if(enemyHp <= 0) enemyHp = 100;
+            } else if(conn) {
+                conn.send({type: 'HIT', dmg: dmg});
+            }
+        } else {
+            play('empty');
+            stopAutoFire();
+        }
+    }
+
+    // 射撃ボタンの挙動
+    const trigger = document.getElementById('trigger');
+    trigger.onpointerdown = (e) => {
+        e.preventDefault();
+        if(fireMode === 'SEMI') {
+            fire();
+        } else {
+            fire();
+            autoFireInterval = setInterval(fire, 150); // フルオートの連射速度
+        }
+    };
+    const stopAutoFire = () => { clearInterval(autoFireInterval); autoFireInterval = null; };
+    trigger.onpointerup = stopAutoFire;
+    trigger.onpointerleave = stopAutoFire;
 
     async function loadSounds() {
         const f = { shot:'shot.mp3', reload:'reload.mp3', ready:'ready.mp3', empty:'empty.mp3' };
@@ -144,25 +208,7 @@
             } catch(e) {}
         }
     }
-
-    function play(k) { if(sounds[k]) { const s = audio.createBufferSource(); s.buffer=sounds[k]; s.connect(audio.destination); s.start(0); } }
-
-    document.getElementById('trigger').onclick = () => {
-        if(isReloading || isGuarding) return;
-        if(ammo > 0) {
-            play('shot'); ammo--;
-            document.getElementById('ammo_ui').innerText = ammo;
-            if(isSolo) {
-                enemyHp -= 10;
-                document.getElementById('enemy_hp').style.width = enemyHp + "%";
-                if(enemyHp <= 0) enemyHp = 100;
-            } else if(conn) {
-                conn.send({type: 'HIT'});
-            }
-        } else {
-            play('empty');
-        }
-    };
+    function play(k) { if(sounds[k]) { const s = audio.createBufferSource(); s.buffer = sounds[k]; s.connect(audio.destination); s.start(0); } }
 </script>
 </body>
 </html>
